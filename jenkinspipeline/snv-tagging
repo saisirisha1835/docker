@@ -1,0 +1,107 @@
+
+pipeline
+{
+   
+    agent
+    {
+    node
+    {
+        label 'almbuildp9'
+    }
+    }
+	environment
+	{
+	releasename=""
+	tag ="http://svnrepop2/svn/iFastBaseRepo/tags/Build/dev/Rel19.2_PROM0011026_project_P0275866_RedLeaf_RDSP_rel_18.5.00.d"
+	tagdest="http://192.168.48.181/svn/iFastDesktopRepo/tags/Build/cicd/RL/DEV"
+	
+	}
+	stages
+	{
+		stage('SVN Tagging')
+		{
+			steps
+			{
+				script
+				{
+					 
+					 def list = []
+					 def Separatedlist = []
+					 
+					def command = ['/opt/CollabNet_Subversion/bin/svn','list','--username=scmtool','--password=L@mySw1ft', tagdest]
+					def proc = command.execute()
+					proc.waitFor()
+					
+					 
+					int code = proc.exitValue()
+					if(code != 0)
+					{
+						list.push("Cannot retrieve branch list from repository; Err: ${proc.err.text}")
+					}
+					else
+					{
+					   def branches = proc.text.trim().tokenize('/')
+					   def sortnumbers
+					   def releaseno
+					   
+					   branches.each()
+					   { 
+					       
+    					   def stringlength=0
+    					   def dotIndex =0
+							if(!("Archive".equalsIgnoreCase(String.valueOf(it.trim()))))
+							{ 
+								if(it.trim().substring(0,2)=="al")
+								{
+								Separatedlist=it.tokenize('.')
+									println('inside rl check')
+									
+									if(Separatedlist.size()>0)	
+									{
+									def Dotcount = Separatedlist.size()
+									println "Dotcount"+Dotcount
+									println "last"+Separatedlist[Dotcount-1]
+									println "lastbutone"+Separatedlist[Dotcount-2]
+									list.add(Separatedlist[Dotcount-2].toInteger())
+									}
+									
+									else
+									{
+										releaseno = 0
+										releasename = 'rl.1.0.'+ releaseno
+									
+									}
+								}
+							 }
+							    
+						}
+						list.sort()
+						
+						println 'list'
+						println "Result"
+						
+						def listcount= list.size() -1
+						println "list[0]" + list[listcount]
+						releaseno=list[listcount].toInteger()+1
+						println releaseno
+						 releasename = 'rl_1.0.'+ releaseno
+						 println releasename
+								println list[0]
+                    def releasevalue=releasename.substring(3,(releasename.length()))
+                    println "final rel value"+  releasevalue
+								
+					}
+					
+				}  
+				/*sh """
+					/opt/CollabNet_Subversion/bin/svn copy --username=ifdscicd --password=99rdRM5C ${tag} ${tagdest}/${releasename} -m "SCM-tag${releasename}"
+					"""*/
+			}
+		}
+   
+
+
+
+   }
+}
+
