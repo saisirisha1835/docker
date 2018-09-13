@@ -1,0 +1,22 @@
+import org.apache.commons.lang.StringUtils
+
+node('apebuildd1'){
+    
+    stage('test'){
+        
+        sh 'echo ERROR'
+        sh 'echo ERROR'
+    
+    filterLogs ('ERROR', 2)
+        
+    }
+}
+
+
+def filterLogs (String filter_string, int occurrence) {
+    def logs = currentBuild.rawBuild.getLog(10000).join('\n')
+    int count = StringUtils.countMatches(logs, filter_string);
+    if (count > occurrence -1) {
+        currentBuild.result='FAIL'
+    }
+}
