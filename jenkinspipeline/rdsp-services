@@ -1,0 +1,121 @@
+properties([gitLabConnection(''), 
+[$class: 'RebuildSettings', 
+autoRebuild: false, rebuildDisabled: false], 
+[$class: 'JobRestrictionProperty'], 
+parameters([password(defaultValue: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJpZmFzdCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJpZmFzdC1zYS10b2tlbi01bDUyeiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJpZmFzdC1zYSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjdmZGNlMzViLWE0OTQtMTFlOC1iNTM5LTAwMWE0YTE2MDFmZCIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDppZmFzdDppZmFzdC1zYSJ9.CLgi55avuu65gcyviri-JCbT6qNBp8699Xr2WmeKqFihwgmFz0yuVC7ShExSFZkIWh4jSogC5QSWpYmjXr8-zzh64k0ts6ZYtKFySsqN8_9dYDeeO-p346saFpJPuADx1ONKtKkgpVtHcLqVqCWRPL8MbQhYo1W3vb5a8Q6XO4v7HSsXQezop36ziaawALHpdCxhP3vP7KRcRKxOZcDoo4_RomjV_FiGQqMPzVtukrUTup1ZQSmNskIQjIe1wp4US9Zh2_7CNI0Wd1DWNjysREsqrrPgI_gTrGsXssbhhQz8_FLvFH1sDT57TQNn8gMFqnSq0wedOMUHNRkW8QFv8g', description: 'dockertoken',
+name: 'dockertoken'), 
+string(defaultValue: 'docker-registry-default.apps.chimp.dev-ifglobalproducts.com', 
+description: 'dockerregistryurl', name: 'dockerregistryurl',
+trim: false), 
+string(defaultValue: '', description: 'The value of this parameter should be in the format ifastbase-17.2.4.q or ifastdesktop-17.2.4.q', name: 'Release_Label', trim: true),
+ string(defaultValue: ' ', description: 'This is the value of immediate previous release to Product_Release value given above. For ex: ifastbase-17.2.3.q or "NO" and ifastdesktop-17.2.3.q or NO', name: 'Previous_Release_Label', trim: true),
+ string(defaultValue: '', description: 'List of change packages to be applied for this release. the values of this parameter goes like (CHG85649V1, CHG85651V2)  or "NO"', name: 'Product_Changes', trim: true),
+ choice(choices: ['POST','GET','DELETE'], description: '', name: 'action'), 
+ choice(choices: ['jrdsp','ifastdb','webplus','desktop','iweb'], description: '', name: 'entity_product'), 
+ choice(choices: ['ACTUAL','PROEXP','PRO','EXP','ALL'], description: '', name: 'APE_ENV'), 
+ choice(choices: ['DEV', 'QA', 'UAT', 'PROD', 'P0275866','redleaf','europeantransformation'], description: '', name: 'SDLC'),
+string(defaultValue: '', 
+description: 'tagname', name: 'tagname', trim: false)]), pipelineTriggers([])])
+
+node('apebuildd1') {
+
+    deleteDir()
+   
+stage ('Checkout') {
+    //git branch: 'feature/P0275866-1031-Containerization', changelog: false, credentialsId: 'SCMJenkins', poll: false, url: 'http://gitrepop1/RDSP/rdsp-services.git'
+	checkout([$class: 'GitSCM', branches: [[name: '*/feature/P0275866-1031-Containerization']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'ifdsbuilduserssh', url: 'git@gitrepop1:RDSP/rdsp-services.git']]])
+   // sh 'wget http://almnexusp1:8081/nexus/content/repositories/productdependencies/CICD/liquidebase/3.6.2/liquidebase-3.6.2.jar'
+} 
+ stage ('tagging'){
+                  
+				  
+		
+		script 
+	   {
+	    sshagent (credentials: ['ifdsbuilduserssh']) {
+	    sh """ cd ${WORKSPACE}
+		git tag ${tagname}
+		git push origin ${tagname} """
+		}
+		}
+		
+                  
+				  
+		
+		
+stage ('Application Build') {
+              sh 'mvn clean install -DskipTests=true'
+}
+
+stage('Checkout of Dependency script')
+                                {
+                                
+                                                   
+                                                     
+                                                     checkout([$class: 'GitSCM', branches: [[name: '*/master']], 
+                                                     doGenerateSubmoduleConfigurations: false, 
+                                                     extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'Upload']], 
+                                                     gitTool: 'Default', submoduleCfg: [], 
+                                                     userRemoteConfigs: [[credentialsId: 'IFDS Build User to access GIT LAB', name: 'Dependency', url: 'http://gitrepop1/IFDSBuild/Package-dependency.git']]])
+
+                                                
+                                }
+
+stage('Script for upload dependencies')
+                                {
+                                
+                                                
+                                                         sh '''#source ~/.bash_profile
+                                                                                #export JAVA_HOME=/opt/local/scm/tools/java-1.8.0-openjdk-1.8.0.31-1.b13.el6_6.x86_64/
+                                                                                #export ANT_HOME=/opt/local/scm/tools/ant/
+                                                                                #export MAVEN_HOME=/opt/local/scm/tools/maven/
+                                                                                #export PATH=${JAVA_HOME}/bin:${MAVEN_HOME}/bin:${ANT_HOME}/bin:${PATH}
+                                                                                export JAVA_HOME=/home/scmtool/tools/java-1.8.0-openjdk-1.8.0.31-1.b13.el6_6.x86_64
+                                                                                export ANT_HOME=/home/scmtool/tools/apache-ant-1.9.4
+                                                                                export MAVEN_HOME=/home/scmtool/tools/apache-maven-3.3.1
+                                                                                export PATH=${JAVA_HOME}/bin:${MAVEN_HOME}/bin:${ANT_HOME}/bin:${PATH}
+                                                                                which java
+                                                                                java -version
+																				cd /home/scmtool/jenkins/workspace/RDSP-Services-pipeline/Upload
+																				sh buildpom.sh ifastbase ${Release_Label} ${Previous_Release_Label} ${Product_Changes}
+                                                                                rm -rf pom.xml
+                                                                                sh getdependency ${Release_Label} apeupgradetable ${SDLC}
+                                                                                sh getdependency ${Release_Label} " " ${SDLC}'''
+                                                
+                                                
+                                }
+stage ('Docker Image Build'){
+    
+
+
+    git branch: 'feature/P0275866-1031-Containerization', changelog: false, credentialsId: 'SCMJenkins', poll: false, url: 'http://gitrepop1/RDSP/rdsp-services.git'
+    sh "$sudo docker login -u something -p $dockertoken $dockerregistryurl"
+    sh '$sudo docker build -t jrdsp-eap . '
+    sh "$sudo docker tag jrdsp-eap $dockerregistryurl/ifast/${tagname}_jrdsp-eap"
+    sh "$sudo docker push $dockerregistryurl/ifast/${tagname}_jrdsp-eap"
+ 
+}
+ 
+}
+ stage('checkout APE')
+                                {
+                                                
+                                                                checkout([$class: 'GitSCM', branches: [[name: '*/master']], 
+                                                                doGenerateSubmoduleConfigurations: false,
+                                                                extensions:[[$class: 'RelativeTargetDirectory', relativeTargetDir: 'APE']], 
+                                                                gitTool: 'Default', 
+                                                                submoduleCfg: [],
+                                                                userRemoteConfigs: [[credentialsId: 'IFDS Build User to access GIT LAB', url: 'http://gitrepop1/APE/apedb-webservices.git']]])
+                                                
+                                }
+                                stage('APE upload')
+                                {
+                                                
+                                                
+                                                                sh """
+                                                                                cd /home/scmtool/jenkins/workspace/RDSP-Services-pipeline/APE 
+                                                                              
+																			 sh updateapedb.sh ${Release_Label} ${SDLC} ${entity_product} ${action}  ${APE_ENV} """
+                                                
+                                }
+}
