@@ -1,0 +1,83 @@
+rdsp-services:
+------------------
+FROM docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ci-cd/openjdk-centos
+VOLUME /tmp
+RUN mkdir -p /RedLeaf/logs
+ADD rdsp-core/target/rdsp-core-0.0.1-SNAPSHOT.jar app.jar
+ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom", "-Dlogging.path=/RedLeaf/logs", "-Dlogging.file=/RedLeaf/logs/rdsp_log.log", "-jar","/app.jar"]
+----------------------------------------------------------------------
+Auth:
+-------------------------------------------------
+#Download Tomcat 8 & Config Java 8
+FROM tomcat:8.0-jre8
+COPY target/rdsp-auth-0.0.1-SNAPSHOT.jar /opt/tomcat/webapps/rdsp-auth-0.0.1-SNAPSHOT.jar
+#Modify the file permission
+RUN chmod -R 777 /usr/local/tomcat
+-------------------------------------------------------------
+apeweb:
+--------------------------------------------------------------
+FROM httpd-dancer2
+ENV DANHOME /home/dancer2/EnvMgmt
+ENV LOG_DIR /run/log
+ENV PATH $PATH:$DANHOME:$DANHOME/bin
+ENV http_proxy ""
+ENV https_proxy ""
+ENV TZ America/Toronto
+RUN  groupadd -r dancer2 -g 433
+RUN  useradd -u 431 -r -g dancer2 -d /home/dancer2 -s /sbin/nologin -c "Dancer2 user" dancer2
+RUN  mkdir /home/dancer2 && chown -R dancer2:dancer2 /home/dancer2
+RUN  mkdir -p /root/.ssh && chmod -c 700 /root/.ssh
+RUN  yum install -y gettext
+COPY bin /home/dancer2/EnvMgmt/bin
+COPY environments /home/dancer2/EnvMgmt/environments
+COPY lib /home/dancer2/EnvMgmt/lib
+COPY public /home/dancer2/EnvMgmt/public
+COPY t /home/dancer2/EnvMgmt/t
+COPY views /home/dancer2/EnvMgmt/views
+COPY templates/* /home/dancer2/EnvMgmt/
+COPY bin/APE/UtilFuncs.pm /usr/share/perl5/APE/
+COPY TEMPLATE_env presetup_ifastbase addIFASTGuestUser.pl setup_fundservtrading setup_swifttrading setup_nscc nscc_datafix.p setup_altnetwork \
+setup_fundservfiles restart_services create_mq_env_files setup_aimapi setup_apps setup_dynasyncapi setup_dynwebapi setup_fundservfiles \
+setup_fundservtrading setup_nscc setup_swifttrading setup_syncapi setup_updateapi nscc_menu_seq_datafix.p setup_jrdsp /home/dancer2/EnvMgmt/
+COPY oc /usr/bin/oc
+RUN ln -s /usr/bin/oc /usr/bin/kubectl
+WORKDIR /home/dancer2/EnvMgmt
+------------------------------------------------------------------------
+apache-webui:
+--------------------------------------------------------
+FROM centos:centos7
+MAINTAINER jbenjamins@ifdsgroup.com
+RUN yum -y --setopt=tsflags=nodocs update && \
+    yum -y --setopt=tsflags=nodocs install epel-release && \
+    yum -y --setopt=tsflags=nodocs install httpd install mod_ldap perl python-setuptools kubernetes-client openssl passwd sudo perl-Log-Log4perl perl-JSON perl-libwww-perl openssh-clients && \
+    yum clean all && \
+    easy_install supervisor && \
+    sed -i '/pam_loginuid.so/c\#session    required     pam_loginuid.so' /etc/pam.d/login && \
+    sed -i '/pam_loginuid.so/c\#session    required     pam_loginuid.so' /etc/pam.d/remote && \
+    mkdir -p -m 700 /.ssh && \
+    mkdir -p /opt/local/{bin,lib} && \
+    mkdir -p /etc/supervisor.d && \
+    mkdir -p /var/www/html/webui && \
+    rm -vf /var/www/html/index.html && \
+    mkdir -p /etc/httpd/conf.d
+# just copy these scripts for now
+COPY apewebui_start /opt/local/bin
+COPY supervisord.conf /etc/supervisord.conf
+COPY httpd.conf /etc/supervisor.d/httpd.conf
+COPY apemgmt.conf /etc/httpd/conf.d/
+COPY shellinabox.conf /etc/httpd/conf.d/
+COPY heartbeat.txt /var/www/html/
+ADD ./webui /var/www/html/
+EXPOSE 80 4200
+WORKDIR /tmp
+CMD /usr/bin/supervisord -c /etc/supervisord.conf
+---------------------------------------------------------------------------------------------
+tapp:
+-----------------------------------------------------
+FROM docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ci-cd/openjdk-centos
+VOLUME /tmp
+ADD TAPremium-boot/target/TAPremium-boot-0.0.1-SNAPSHOT.jar app.jar
+RUN useradd -g root myuser
+USER myuser
+ENTRYPOINT ["/bin/java","-Djava.security.egd=file:/dev/./urandom","-jar","/app.jar"]
+EXPOSE 9000
