@@ -1,0 +1,428 @@
+properties([gitLabConnection(''), [$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false],
+ [$class: 'JobRestrictionProperty'], 
+ parameters([choice(choices: ['DEV', 'QA', 'UAT', 'PROD'], description: '''Please select the Environment
+''', name: 'Environment'),
+ choice(choices: ['ggf','trc', 'iac', 'mfs', 'axl,aig',  'azz', 's1m,nci,gep,gci,ici,lci', 'dyn,mif,aim,ina', 'zig', 'mar', 'ssg', 'frc', 
+ 'sun', 'thr', 'jma', 'nce', 'bip', 'all', 'frc,nxt', 'pem', 'ina', 'aim,dyn', 'ats', 'sun,slf,ccm,frc', 'slf', 'rla', 'mif', 'tho',
+ 'lci,ici,gep,gci,nci', 'aim,ats', 'ifmasterd1', 'igl,pem,mfs', 'fkr', 'azz', 'fco', 'fkr,swg', 'mmf', 'dyn', 'han', 'sng', 'ccm,iac', 
+ 'aam', 'ccm', 'pmo', 'atl', 'fkr,swg', 'bal', 'arm', 'axl', 'mif,mmf', 'bay', 'aus', '----------------------svndev1 test clients -----------------------------', 
+ 'aim,atl,boa,ccm,dyn,axa,mfs,mmf', 
+ '----------------------------------------------------------18.2 QA Clients (below)--------------------------------------------------------------------------------------------', 'aam,abn,aft,aim,alz,arx,atl,ats,axa,axl,axm,azz,bab,bip,blk,boa,btb,ccm,cif,dbl,dyn,ezn,faw,fco,fdp,fkr,frc,gfe,goc,gon,gtb,hkb,hom,iac,if1,if2,igl,ina,jma,jpm,kim,maw,mer,mfs,mif,mlh,mmf,mrc,nce,nxg,pcb,pem,pim,pin,pmo,pop,sbf,scl,sl1,slf,srd,ssg,ssi,sun,swg,tho,trc,twb,uam', 'dyn', 'aim', 'hkb', 'dyn,axl,ina', 'aim,ccm,iac,mif,mmf,ina,dyn,faw,sun,slf', 'atl', 'fcm', 'ina,dyn', 'pem', 'nxg', 'ina', '----------------------------------------------------------Project DEV Clients (below)-------------------------------------------------------------------------------------------', 'aim,dyn,ina', 'azz,alz,pem,pcb', '', '----------------------------------------------------------- UAT TA and SSII CLIENTs-----------------------------------------------------------------------------------------', 'axl', 'aag,aig,alb,amp,anf,ani,apl,atb,axa,bab,bcm,bgi,bip,blk,blr,boa,bra,bra1,btb,cal,cif,cim,dam,dbc,dfd,dmo,exl,fdp,fkr,frc,goc,hob,hom,hrv,ihk,inb,ini,ins,jpm,lmc,maw,mer,mfs,mgl,mrc,msd,muz,nbd,nce,ntx,nxg,omi,pcp,pim,pin,pmo,prf,pyr,sbf,scl,sg3,shi,slf,ss2,ssc,ssg,sun,swi,tga,trc,uaa,ubq,ubs,vgi', 'axl,aig,igl,tho,pem', 'mag', 'mif', 'sun', 'aim', 'ccm', 'sun,frc,slf', 'pmo', 'fco', 'hkb', 'zub', 'pem,pcb', 'aig', 'pcb', '---------------------------------------------------------------QAUAT CLIENTs------------------------------------------------------------------',
+ 'pgi', 'nbg', 'azz,pem,pcb', '', 'frc', 'jma', 'mmf', 'aim,mif', 'goc', 'gci'], description: 'Please Select the Clients', name: 'Clients'),
+ string(defaultValue: 'http://192.168.48.181/svn/iFastBaseRepo/branches/project_P0275866_RedLeaf_RDSP', 
+ description: 'Please select the tagsource for Ifast Application', name: 'PCTTagSource', trim: false), 
+ string(defaultValue: 'http://192.168.48.181/svn/iFastDesktopRepo/branches/project_P0275866_RDSP_Red_Leaf', 
+ description: 'Please select the tagsource for Desktop Application', name: 'CPPTagSource', trim: false)]), pipelineTriggers([cron('0 2 * * *')])])
+pipeline
+ {
+	agent
+	{
+		node
+		{
+		label 'apebuildd1'
+		}
+		
+	}
+	environment
+	{
+		EnvironmentSuffix=""
+		DockerRegistryUrl=""
+		DockerToken=""
+		APE_ENV=""
+		FinalPCTTagDestination=""
+		FinalCPPTagDestination=""
+		cppRelease_Label=""
+		cppPrevious_Release_Label=""
+		webRelease_Label=""
+		webPrevious_Release_Label=""
+		taRelease_Label=""
+		taPrevious_Release_Label=""
+		Release_Label=""
+		Previous_Release_Label=""
+		PCTtagdest="http://192.168.48.181/svn/iFastBaseRepo/tags/Build/cicd/ET/QA"
+		CPPtagdest="http://192.168.48.181/svn/iFastDesktopRepo/tags/Build/cicd/ET/QA"
+		SelectedEnvironment=""
+		SelectedClient=""
+		SelectedPCTTagSource=""
+		SelectedCPPTagSource=""
+		Tag=""
+		PreviousTag=""
+		previousReleasename =""
+		releasename=""		
+		cppreleasename=""
+		cpppreviousReleasename =""		
+		releasevalue=""
+		BaseFolder="cicd"
+		CPPSVNCheckoutFolder=""
+		webSVNCheckoutFolder=""
+		tagPrefix="at.1.0."
+	}
+	stages
+	{
+		stage('Build Environment Variables')
+		{
+			steps
+			{
+				script
+				{
+					def myparams = currentBuild.rawBuild.getAction(ParametersAction).getParameters()
+					myparams.each
+					{
+					if (it.name=='Environment') 
+						{ 
+						SelectedEnvironment=String.valueOf(it).trim() 
+						SelectedEnvironment=SelectedEnvironment.substring(SelectedEnvironment.lastIndexOf("=") + 2,SelectedEnvironment.length()-1)
+						println SelectedEnvironment
+						}
+						if (it.name=='Clients') 
+						{ 
+						SelectedClient=String.valueOf(it).trim() 
+						SelectedClient=SelectedClient.substring(SelectedClient.lastIndexOf("=") + 2,SelectedClient.length()-1)
+						println SelectedClient
+						}
+						if (it.name=='PCTTagSource') 
+						{ 
+						SelectedPCTTagSource=String.valueOf(it).trim() 
+						SelectedPCTTagSource=SelectedPCTTagSource.substring(SelectedPCTTagSource.lastIndexOf("=") + 2,SelectedPCTTagSource.length()-1)
+						println SelectedPCTTagSource
+						}
+						if (it.name=='CPPTagSource') 
+						{ 
+						SelectedCPPTagSource=String.valueOf(it).trim() 
+						SelectedCPPTagSource=SelectedCPPTagSource.substring(SelectedCPPTagSource.lastIndexOf("=") + 2,SelectedCPPTagSource.length()-1)
+						println SelectedCPPTagSource
+						}
+					
+					}
+					if(SelectedEnvironment == "DEV")									
+					{
+						println "inside"
+						EnvironmentSuffix=".d"
+						DockerRegistryUrl="docker-registry-default.apps.apetest.ifglobalproducts.com"
+						DockerToken="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJpZmFzdCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJwdXNoZXItdG9rZW4tNXV2bHIiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoicHVzaGVyIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiOThlZTc4YTAtNDdhNy0xMWU3LThmMTMtMDA1MDU2OWI1NWRkIiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OmlmYXN0OnB1c2hlciJ9.ZEocHy7fCzcVfqRQ0GxAnD3yenGETa6TaRc2a8HH3QYkWyYDIDNi6U8BHDrVscWDsggF1vzS7fdhiNtX2Uf3ecscU5pnt1p5PdzHGKKYirOMuuViTj58-VFPRPthP14v4_FwELOqchuMiGo5T3RehNtJacv3CXzDMp6ogulC-oyiMcgIG5_fXTdbXqvFfyFcGtXZkZ85BRLqHpE3zoC_oFAyLF1XmRATI_uWiGmcF2uTvJfXxcZKSGhvkbRaiOPdhptBmhzKrQ8rcajp2i1RpuKNtnQk2aekRKGk1J1oOSA1JziHsBCnmX_OEP35Wi-Lf12be74GDsAoSF0kd-M_yg"
+						APE_ENV="EXP"
+					}
+					if(SelectedEnvironment == "QA")									
+					{
+						println "inside"
+						EnvironmentSuffix=".q"
+						DockerRegistryUrl="docker-registry-default.apps.apetest.ifglobalproducts.com"
+						DockerToken="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJpZmFzdCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJwdXNoZXItdG9rZW4tNXV2bHIiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoicHVzaGVyIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQudWlkIjoiOThlZTc4YTAtNDdhNy0xMWU3LThmMTMtMDA1MDU2OWI1NWRkIiwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OmlmYXN0OnB1c2hlciJ9.ZEocHy7fCzcVfqRQ0GxAnD3yenGETa6TaRc2a8HH3QYkWyYDIDNi6U8BHDrVscWDsggF1vzS7fdhiNtX2Uf3ecscU5pnt1p5PdzHGKKYirOMuuViTj58-VFPRPthP14v4_FwELOqchuMiGo5T3RehNtJacv3CXzDMp6ogulC-oyiMcgIG5_fXTdbXqvFfyFcGtXZkZ85BRLqHpE3zoC_oFAyLF1XmRATI_uWiGmcF2uTvJfXxcZKSGhvkbRaiOPdhptBmhzKrQ8rcajp2i1RpuKNtnQk2aekRKGk1J1oOSA1JziHsBCnmX_OEP35Wi-Lf12be74GDsAoSF0kd-M_yg"
+						APE_ENV="PRO"
+					}
+					println "EnvironmentSuffix"+ EnvironmentSuffix
+				}
+				
+			}
+		}
+		stage('RL Tag Parallel')
+		{
+			parallel
+			{
+				stage('PCT tagging')
+				{
+					steps
+					{
+					
+						script
+						{	
+								//FinalPCTTagDestination=PCTtagdest+"/"+SelectedEnvironment
+								FinalPCTTagDestination=PCTtagdest
+								println "pcttagdestination"+FinalPCTTagDestination
+								def list = getTagNo(FinalPCTTagDestination)
+								if(list.size() >0)
+								{
+									def listcount= list.size() -1
+									println "list[0]" + list[listcount]
+									releaseno=list[listcount].toInteger()+1
+									println releaseno
+									 releasename = tagPrefix+ releaseno
+									 previousReleasename = tagPrefix+ list[listcount]
+									 println releasename
+									println list[0]	
+								}
+								else
+								{
+											releaseno = 0
+											releasename = tagPrefix+ releaseno
+											previousReleasename = tagPrefix+ releaseno
+								}							
+						}
+						
+						println releasename+releasename
+						println previousReleasename+previousReleasename
+						CreateSVNTag(SelectedPCTTagSource,FinalPCTTagDestination,releasename)
+							
+					}			
+				}
+				stage('DesktopCPP tagging')
+				{
+					steps
+					{			
+						script
+						{
+							
+							//FinalCPPTagDestination=CPPtagdest+"/"+SelectedEnvironment					
+							FinalCPPTagDestination=CPPtagdest
+							println "cpptagdestination"+FinalCPPTagDestination
+							def list = getTagNo(FinalCPPTagDestination)
+							if(list.size() >0)
+							{
+								def listcount= list.size() -1
+								println "list[0]" + list[listcount]
+								releaseno=list[listcount].toInteger()+1
+								println releaseno
+								cppreleasename = tagPrefix+ releaseno
+								cpppreviousReleasename = tagPrefix+ list[listcount]
+								
+							}
+							else
+							{
+							        releaseno = 0
+							        cppreleasename = tagPrefix+ releaseno
+									cpppreviousReleasename = tagPrefix+ releaseno
+							}								
+							releasevalue=cppreleasename.substring(3,(cppreleasename.length()))
+						}
+						println releasename+cppreleasename
+						CreateSVNTag(SelectedCPPTagSource,FinalCPPTagDestination,cppreleasename)						
+				
+					}	
+				}
+		
+			}
+		}
+		stage('Getting values for Variables')
+		{
+			steps
+			{
+				script
+				{
+					Tag =FinalPCTTagDestination+"/"+releasename
+					PreviousTag =FinalPCTTagDestination+"/"+previousReleasename												
+					Previous_Release_Label ="ifastbase-"+previousReleasename.trim()
+					Release_Label ="ifastbase-"+releasename.trim()                                                 
+					println "Previous_Release_Label: ${Previous_Release_Label}"
+					println "Release_Label: ${Release_Label}"
+					webPrevious_Release_Label ="ifastdesktop-"+cpppreviousReleasename+","+ Previous_Release_Label
+					webRelease_Label ="ifastdesktop-"+cppreleasename.trim()   
+					cppPrevious_Release_Label ="webplus-"+cpppreviousReleasename+","+ Previous_Release_Label
+					cppRelease_Label ="webplus-"+cppreleasename.trim()   
+					taPrevious_Release_Label ="tapremium-"+cpppreviousReleasename+","+Previous_Release_Label
+					taRelease_Label ="tapremium-"+cppreleasename.trim()   
+					CPPSVNCheckoutFolder=FinalCPPTagDestination+"/"+cppreleasename+"/iFastDesktop"					
+					webSVNCheckoutFolder=FinalCPPTagDestination+"/"+cppreleasename+"/iFastDesktop/ifastdeskweb"
+				}
+			}
+		}
+		stage('PCT')
+				{
+					steps
+					{
+						build job: 'ifastwithapedb_ET', 
+						  parameters: [
+							  string(name: 'folder', value: String.valueOf(PCTtagdest)),
+							string(name: 'tag', value:  String.valueOf(Tag)),
+							string(name: 'Previous_Tag', value:  String.valueOf(PreviousTag)),
+							string(name: 'clients', value: String.valueOf(SelectedClient)),
+							string(name: 'APE', value: 'YES'),
+							string(name: 'package', value: 'packageFull'),
+							string(name: 'Release', value:  '18.5'),
+							string(name: 'Variance_Number', value: '0'),
+							string(name: 'Release_Label', value:  String.valueOf(Release_Label)),
+							//string(name: 'Previous_Release_Label', value: String.valueOf(Previous_Release_Label)),
+							string(name: 'Previous_Release_Label', value: 'NO'),
+						    string(name: 'Product_Changes', value: 'NO'),
+						    string(name: 'SDLC', value: 'ET'),
+						    string(name: 'Release_Value', value:  String.valueOf(releasename)),
+							string(name: 'DBUPGRADE', value: 'NO'),
+							string(name: 'SkipImageBuild', value:  'NO'),
+							string(name: 'Tag_BaseImage', value: '11.7.2.1'),
+						 	string(name: 'Num_Threads', value:  '4'),
+						 	string(name: 'OE_GIT_TAG', value: 'V11.7.2.1')
+						 	          ]
+							
+					}
+					
+					post
+					{       
+						failure
+						 {
+							   DeleteSVNTag(FinalPCTTagDestination,releasename) 
+							   DeleteSVNTag(FinalCPPTagDestination,cppreleasename)      							  
+							   
+						 }
+					}
+			 
+				}
+		
+			
+		stage('Red Leaf parallel')
+		{
+		
+			parallel
+			{
+					stage('Desktop Web')
+				{ 
+					steps
+					{
+						build job: 'Desktop_Web', 
+						parameters: [
+						
+						string(name: 'BuildType', value: String.valueOf(BaseFolder)),
+						string(name: 'Release_Label', value:  String.valueOf(webRelease_Label)),
+						//string(name: 'Previous_Release_Label', value: String.valueOf(webPrevious_Release_Label)),
+						string(name: 'Previous_Release_Label', value: 'NO'),
+						 string(name: 'Product_Changes', value: 'NO'),
+						 string(name: 'SDLC', value: 'ET'),
+						string(name: 'action', value: 'POST'),
+						string(name: 'entity_product', value: 'desktop'),
+						string(name: 'APE_ENV', value: String.valueOf(APE_ENV)),
+						string(name: 'ReleaseNumber', value: String.valueOf(releasename)),
+						string(name: 'WebSVNCheckoutFolder', value: String.valueOf(webSVNCheckoutFolder)),
+						string(name: 'dockertoken', value: String.valueOf(DockerToken)),
+						string(name: 'dockerregistryurl', value: String.valueOf(DockerRegistryUrl))					
+												
+						] 
+					}
+			}
+			
+				
+				stage('TAPremium-app')
+				{ 
+				steps
+				{
+					build job: 'TAPremium-app-pipeline',
+					parameters: [
+					string(name: 'dockerregistryurl', value: String.valueOf(DockerRegistryUrl)),					
+						string(name: 'dockertoken', value: String.valueOf(DockerToken)),					
+						string(name: 'Release_Label', value:  String.valueOf(taRelease_Label)),
+						//string(name: 'Previous_Release_Label', value: String.valueOf(taPrevious_Release_Label)),
+						string(name: 'Previous_Release_Label', value: 'NO'),
+						string(name: 'Product_Changes', value: 'NO'),					
+						string(name: 'action', value: 'POST'),
+						string(name: 'entity_product', value: 'Tapremium'),
+						string(name: 'APE_ENV', value: String.valueOf(APE_ENV)),
+						string(name: 'SDLC', value: 'ET'),
+						string(name: 'tagname', value: String.valueOf(cppreleasename))									
+				] 
+				
+			}
+		}
+		stage('TApremium-UI')
+		{ 
+			steps
+			{
+				build job: 'TApremium-ui-pipeline',
+				parameters: [
+				string(name: 'tagname', value: String.valueOf(cppreleasename)),
+				string(name: 'dockertoken', value: String.valueOf(DockerToken)),
+				string(name: 'dockerregistryurl', value: String.valueOf(DockerRegistryUrl))		
+				] 
+				
+			}
+		}
+		stage('Desktop client')
+				{
+					steps
+					{ 
+					build job: 'Desktop_CPP_QA', 
+					parameters: [
+							
+							string(name: 'CPPSVNCheckoutFolder', value: String.valueOf(CPPSVNCheckoutFolder))					
+					] 
+					}
+				}
+		
+              
+				
+				
+		}		
+			post
+			{       
+				failure
+                 {
+                         
+					   DeleteGitTag(cppreleasename,"/home/scmtool/jenkins/workspace/TApremium-ui-pipeline")
+					   DeleteGitTag(cppreleasename,"/home/scmtool/jenkins/workspace/TAPremium-app-pipeline")		   
+					   
+                 }
+			}
+		}                          
+		
+	}
+ }
+//Functions handled 
+ //Parse Get maximum Tag No to create new tags
+def getTagNo(tagdest)
+{
+    def Taglist = []					 
+					def command = ['/opt/CollabNet_Subversion/bin/svn','list','--username=scmtool','--password=L@mySw1ft', tagdest]
+					def proc = command.execute()
+					proc.waitFor()	
+					 
+					int code = proc.exitValue()
+					if(code != 0)
+					{
+						Taglist.push("Cannot retrieve branch list from repository; Err: ${proc.err.text}")
+					}
+					else
+					{
+					   def branches = proc.text.trim().tokenize('/')
+					   def sortnumbers
+					   def releaseno
+					   
+					   branches.each()
+					   { 
+    					   def stringlength=0
+    					   def dotIndex =0
+							if(!("Archive".equalsIgnoreCase(String.valueOf(it.trim()))))
+							{ 
+								if(it.trim().substring(0,2)=="at")
+								{
+									if(it.lastIndexOf(".")>0)	
+									{
+										println it.trim()
+										stringlength=it.trim().length()
+										println stringlength
+										dotIndex=it.trim().lastIndexOf(".")
+										println dotIndex
+										sortnumbers=  it.trim().substring(dotIndex+1,stringlength)
+										println sortnumbers.trim()
+										Taglist.add(sortnumbers.trim().toInteger())									
+									} 
+								 }
+							}
+							    
+						}
+						Taglist.sort()						
+						
+					}
+					
+    return Taglist
+}
+def CreateSVNTag(tagsource,tagdest,releasename)
+{
+
+				sh """
+					/opt/CollabNet_Subversion/bin/svn copy --username=ifdscicd --password=99rdRM5C ${tagsource} ${tagdest}/${releasename} -m "SCM-tag${releasename}"
+					"""
+}
+	
+def DeleteSVNTag(tagdest,releasename)
+{
+				sh """
+					/opt/CollabNet_Subversion/bin/svn delete --username=ifdscicd --password=99rdRM5C  ${tagdest}/${releasename} -m "SCM-tagdelete${releasename}"
+					"""
+}
+	
+def DeleteGitTag(releasename,BaseDirectoryPath)
+{           
+	sshagent (credentials: ['ifdsbuilduserssh'])
+	{                  
+	sh """ cd ${BaseDirectoryPath}
+	git push --delete origin ${releasename}
+	git tag -d ${releasename}
+	"""
+	}
+}
