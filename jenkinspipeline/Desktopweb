@@ -1,0 +1,151 @@
+properties([
+    gitLabConnection(''), 
+    [$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false],
+    parameters([
+        choice(choices: ['rl.1.0.5','rl.1.0.6','18.4.0.6', '18.4.0.5', '18.4.0.4', '18.4.0.3', '18.4.0.2', 
+        '18.4.0.1', '18.2.0.0', '18.2.0.1', '18.2.0.2', '18.4.0.0', '18.2.0.3', 
+        '18.2.0.4', '18.2.0.5', '18.2.0', '18.2.1', '18.2.2', '18.3.0.0', '18.2.3',
+        '18.3.0.1', '18.3.0.2', '18.3.0.3', '18.3.0.4', '18.2.4', '18.2.5', 
+        '18.3.0.5', '18.3.0.6', '18.3.0.6.1', '18.3.0', '18.3.1', '18.3.2', '18.3.3',
+        'P0275866_r1.0.0', '18.3.4', '18.3.5', '18.3.6', '1.0.0','1.0.3'],
+        description: 'Release number specified in tags e.g.  18.2.0.2 for QV2 ',
+        name: 'Tag_Release_Value'),
+        choice(choices: ['rl.1.0.5','rl.1.0.6','18.4.6.q', '18.4.5.q', '18.4.4.q', '18.4.3.q', '18.4.2.q', 
+        '18.4.1.q', '18.4.0.q', '18.2.0.q', '18.2.1.q', '18.2.2.q', '18.2.3.q', 
+        '18.2.4.q', '18.2.5.q', '18.2.0.u', '18.2.1.u', '18.2.2.u', '18.3.0.q', 
+        '18.2.3.u', '18.3.1.q', '18.3.2.q', '18.3.3.q', '18.3.4.q', '18.2.4.u', 
+        '18.2.5.u', '18.3.5.q', '18.3.6.q', '18.3.0.u', '18.3.1.u', '18.3.2.u', 
+        '18.3.3.u', '1.0.0', '18.3.4.u', '18.3.5.u', '18.3.6.u','1.0.3'],
+        description: 'Release number used by APE e.g.   18.2.2.q for QV2 or 18.2.1.u for UV1', name: 'APE_Release_Value'),
+        choice(choices: ['qa', 'uat', 'dev','cicd'], description: '', name: 'SDLC'), 
+        choice(choices: ['dev', 'InspintTesting', 'qa', 'qaproj', 'qauat', 'uat','cicd'],
+        description: '', name: 'BuildType'), 
+        string(defaultValue: '', description: '', name: 'ReleaseNumber', trim: false)]),
+        pipelineTriggers([])])
+def VERSION
+ pipeline
+ {
+     agent
+	{
+		node
+		{
+		    label 'apebuildd1'
+		}
+	}
+	 
+	stages
+	{
+        stage('SVN Checkout')
+        {
+        	steps
+        	{
+        	     deleteDir()
+            checkout([$class: 'SubversionSCM',
+            additionalCredentials: [], 
+            excludedCommitMessages: '',
+            excludedRegions: '',
+            excludedRevprop: '', 
+            excludedUsers: '',
+            filterChangelog: false,
+            ignoreDirPropChanges: false, 
+            includedRegions: '', 
+            locations: [[credentialsId: 'SCMTool APE Build D1',
+            depthOption: 'infinity',
+            ignoreExternalsOption: true,
+            local: '.', 
+            remote: 'http://svnrepop2/svn/iFastDesktopRepo/tags/Build/${BuildType}/${ReleaseNumber}/iFastDesktop/ifastdeskweb']],
+            quietOperation: true,
+            workspaceUpdater: [$class: 'UpdateUpdater']])
+        	}
+        }
+        stage('PreBuildStep')
+        {
+        			 steps
+        			 {
+        			 sh 'echo /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}'
+                		sh '''
+                        	if [ -d "/home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}" ]; then
+                        	rm -r /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}
+                            fi  
+                			'''
+        			 }
+        }
+        stage('Build')
+        {
+            steps
+        	{
+                sh 'mvn clean install -DskipTests=true -DartefactDir=/home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}'
+        	}
+        	post
+        	{
+                	success
+                	{
+                	    sh '''ls'''
+                	     script
+		                {
+                        def pom = readMavenPom()
+                    	VERSION=pom.version
+            				println VERSION
+            			}
+                    	sh """
+            	
+            		    tar -xvzf /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}/desktopweb-${VERSION}.tar.gz -C /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}/
+                        mkdir -p /home/scmtool/jenkins/build_archive/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}/
+                        cp -r /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/${BuildType}/${ReleaseNumber}/ /home/scmtool/jenkins/build_archive/Desktop_Web_Pipeline/${BuildType}/
+                        """
+                	}
+        	}
+		}
+		stage('Fetch docker file')
+		{
+		    steps
+		    {
+		         checkout([$class: 'GitSCM',
+                         branches: [[name: '*/cicd']],
+                         doGenerateSubmoduleConfigurations: false,
+                         extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'Dependency']],
+                         gitTool: 'Default', 
+                         submoduleCfg: [], 
+                        userRemoteConfigs: [[credentialsId: 'SCMJenkins', url: 'http://gitrepop1/APE/desktopweb-imagebuildscripts.git']]]) 
+		    }
+		}
+		
+		stage('Copy jar file')
+		{
+		    steps
+		    {
+		         sh ''' cp /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/target/desktopweb-1.0.jar  /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/Dependency/docker/'''
+		    }
+		}
+		
+		stage('Build Docker Image')
+		{
+		    steps
+		    {
+		       sh """
+			   
+    		           #!/bin/sh
+                    	# example 1.1.0.1 1.1.1.q qa
+                   $sudo docker login -u something -p eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJpZmFzdCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJpZmFzdC1zYS10b2tlbi01bDUyeiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJpZmFzdC1zYSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjdmZGNlMzViLWE0OTQtMTFlOC1iNTM5LTAwMWE0YTE2MDFmZCIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDppZmFzdDppZmFzdC1zYSJ9.CLgi55avuu65gcyviri-JCbT6qNBp8699Xr2WmeKqFihwgmFz0yuVC7ShExSFZkIWh4jSogC5QSWpYmjXr8-zzh64k0ts6ZYtKFySsqN8_9dYDeeO-p346saFpJPuADx1ONKtKkgpVtHcLqVqCWRPL8MbQhYo1W3vb5a8Q6XO4v7HSsXQezop36ziaawALHpdCxhP3vP7KRcRKxOZcDoo4_RomjV_FiGQqMPzVtukrUTup1ZQSmNskIQjIe1wp4US9Zh2_7CNI0Wd1DWNjysREsqrrPgI_gTrGsXssbhhQz8_FLvFH1sDT57TQNn8gMFqnSq0wedOMUHNRkW8QFv8g docker-registry-default.apps.chimp.dev-ifglobalproducts.com
+				   #cd /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline/Dependency
+				   cd /home/scmtool/jenkins/workspace/Desktop_Web_Pipeline
+				   pwd
+				   ls
+                   #$sudo docker build --build-arg WORKSPACE_URL="${env.BUILD_URL}" --build-arg RELEASE=Rel_"${Tag_Release_Value}" -q --build-arg NO_PROXY=1 --build-arg SDLC="${SDLC}" -t "${APE_Release_Value}"_desktop-eap docker/deploy-desktopweb-springboot-1 &&
+                    $sudo docker build --build-arg WORKSPACE_URL="${env.BUILD_URL}" --build-arg RELEASE="${Tag_Release_Value}" --build-arg NO_PROXY=1 --build-arg SDLC="${SDLC}" -t "${APE_Release_Value}"_desktop-eap -f Dependency/docker/deploy-desktopweb-springboot-1/Dockerfile . &&
+                    $sudo docker tag "${APE_Release_Value}"_desktop-eap docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ifast/"${APE_Release_Value}"_desktop-eap &&
+                    $sudo docker push docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ifast/"${APE_Release_Value}"_desktop-eap &&
+                    $sudo docker rmi --no-prune docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ifast/"${APE_Release_Value}"_desktop-eap &&
+                    #$sudo docker build -q --build-arg NO_PROXY=1 -t "${APE_Release_Value}"_desktop-httpd docker/deploy-desktopweb-httpd-24 &&
+                    $sudo docker build --build-arg NO_PROXY=1 -t "${APE_Release_Value}"_desktop-httpd -f Dependency/docker/deploy-desktopweb-httpd-24/Dockerfile . &&
+                    $sudo docker tag "${APE_Release_Value}"_desktop-httpd docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ifast/"${APE_Release_Value}"_desktop-httpd &&
+                    $sudo docker push docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ifast/"${APE_Release_Value}"_desktop-httpd &&
+                    $sudo docker rmi --no-prune docker-registry-default.apps.chimp.dev-ifglobalproducts.com/ifast/"${APE_Release_Value}"_desktop-httpd
+                    """
+
+
+		    }
+		}
+    
+	}
+}
